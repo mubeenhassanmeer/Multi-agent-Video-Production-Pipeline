@@ -9,17 +9,56 @@ safe to leave running/screen-share.
     python -m pipeline.control_center
     -> http://127.0.0.1:5057
 """
+import json
+
+import requests
 from flask import Flask, redirect, request
 
 from . import config
+
+# Curated, manually vetted subset of Fish Audio's public voice library
+# (1000+ entries) -- narration-tagged, generic (not real-person/franchise
+# voice clones, to stay clear of publicity-rights issues), verified to
+# exist via a live API call before being hardcoded here.
+FISHAUDIO_CURATED_VOICES = [
+    ("", "(base model voice, no reference)"),
+    ("536d3a5e000945adb7038665781a4aca", "Ethan -- male, professional, educational narration"),
+    ("b347db033a6549378b48d00acb0d06cd", "Selene -- female, calm, soft narration"),
+    ("d8a1340984ee4b63ad1ffae27a6a4339", "ELITE -- male, confident, energetic narration"),
+    ("bf322df2096a46f18c579d0baa36f41d", "Adrian -- male, deep, slow narration"),
+    ("933563129e564b19a115bedd57b7406a", "Sarah -- female, soft, conversational narration"),
+    ("9032b5f2e2554b5a957ad655c052af16", "Slax -- male, deep, educational narration"),
+    ("8ec9973300874562962bbcb300f82213", "Guyzo -- male, narration/advertisement"),
+]
+
+
+def _fetch_elevenlabs_voices():
+    """Live-fetch the account's actual voice library. Returns None if no
+    key is set (so the UI can fall back to a helpful message instead)."""
+    if not config.ELEVENLABS_API_KEY:
+        return None
+    try:
+        resp = requests.get(
+            "https://api.elevenlabs.io/v1/voices",
+            headers={"xi-api-key": config.ELEVENLABS_API_KEY},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        voices = resp.json().get("voices", [])
+        return [("", "(none selected)")] + [
+            (v["voice_id"], f'{v["name"]} -- {v.get("category", "")}') for v in voices
+        ]
+    except Exception:
+        return None
+
 
 app = Flask(__name__)
 
 FIELDS = [
     ("TTS_ENGINE", "select", ["piper", "elevenlabs", "fishaudio"]),
-    ("ELEVENLABS_VOICE_ID", "text", None),
+    ("ELEVENLABS_VOICE_ID", "voice_select_elevenlabs", None),
     ("ELEVENLABS_MODEL_ID", "text", None),
-    ("FISHAUDIO_REFERENCE_ID", "text", None),
+    ("FISHAUDIO_REFERENCE_ID", "voice_select_fishaudio", None),
     ("FISHAUDIO_MODEL", "text", None),
     ("IMAGE_ENGINE", "select", ["placeholder", "pollinations", "imagen"]),
     ("IMAGE_CADENCE_SECONDS", "number", None),
@@ -61,8 +100,8 @@ HINTS = {
     "IMAGE_MAX_RETRIES": "retries for one failed image before falling back to a placeholder",
     "IMAGE_MASTER_PROMPT": "style anchor prepended to every scene's image prompt, for a consistent look",
     "MUSIC_VOLUME": "background music volume relative to voiceover (0.0-1.0, e.g. 0.12)",
-    "ELEVENLABS_VOICE_ID": "from your ElevenLabs voice library",
-    "FISHAUDIO_REFERENCE_ID": "leave blank to use the base model voice",
+    "ELEVENLABS_VOICE_ID": "live-fetched from your account if ELEVENLABS_API_KEY is set in .env",
+    "FISHAUDIO_REFERENCE_ID": "curated subset -- browse the full 1000+ library at fish.audio/discovery",
 }
 
 
@@ -76,15 +115,40 @@ def _current(key: str, default: str = "") -> str:
     return str(value)
 
 
+def _select_html(name: str, value: str, options) -> str:
+    opts = "".join(
+        f'<option value="{v}"{" selected" if v == value else ""}>{label}</option>' for v, label in options
+    )
+    return f'<select name="{name}">{opts}</select>'
+
+
 def _render_field(name: str, kind: str, options) -> str:
     value = _current(name)
     hint = f'<span class="hint"> - {HINTS[name]}</span>' if name in HINTS else ""
     label = f'<label>{name}{hint}</label>'
+
     if kind == "select":
         opts = "".join(
             f'<option value="{o}"{" selected" if o == value else ""}>{o}</option>' for o in options
         )
         return f'{label}<select name="{name}">{opts}</select>'
+
+    if kind == "voice_select_fishaudio":
+        return label + _select_html(name, value, FISHAUDIO_CURATED_VOICES)
+
+    if kind == "voice_select_elevenlabs":
+        voices = _fetch_elevenlabs_voices()
+        if voices is None:
+            return (
+                label
+                + '<div class="hint">No ELEVENLABS_API_KEY set in .env -- add one to see your '
+                  'actual voice library here. Meanwhile, browse voices at '
+                  '<a href="https://elevenlabs.io/app/voice-library" target="_blank">elevenlabs.io/app/voice-library</a> '
+                  "and enter a voice ID manually below.</div>"
+                + f'<input type="text" name="{name}" value="{value}" placeholder="voice_id">'
+            )
+        return label + _select_html(name, value, voices)
+
     if kind == "textarea":
         return f'{label}<textarea name="{name}">{value}</textarea>'
     return f'{label}<input type="{kind}" step="any" name="{name}" value="{value}">'
@@ -102,7 +166,7 @@ def save():
     for name, _kind, _options in FIELDS:
         if name in request.form:
             overrides[name] = request.form[name]
-    config.CONTROL_CENTER_CONFIG_PATH.write_text(__import__("json").dumps(overrides, indent=2))
+    config.CONTROL_CENTER_CONFIG_PATH.write_text(json.dumps(overrides, indent=2))
     return redirect("/")
 
 
