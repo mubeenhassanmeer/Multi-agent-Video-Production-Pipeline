@@ -1,3 +1,4 @@
 {
-  "TTS_ENGINE": "fishaudio"
+  "TTS_ENGINE": "fishaudio",
+  "IMAGE_ENGINE": "pollinations"
 }
