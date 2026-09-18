@@ -21,6 +21,50 @@ upload step is built but blocked on one credential only you can provide
 Once each key is obtained, put it in `.env` (never paste API keys in chat) —
 see `.env.example` for the exact variable names.
 
+## Setting up on a new machine (e.g. a second laptop)
+
+Cloning this repo alone isn't enough — `.env`, `venv/`, and the voice model
+are deliberately not in git (see `.gitignore`). This gets you fully running:
+
+```bash
+git clone https://github.com/mubeenhassanmeer/Multi-agent-Video-Production-Pipeline.git
+cd Multi-agent-Video-Production-Pipeline
+
+python3 -m venv venv
+./venv/bin/pip install -r requirements.txt
+
+cp .env.example .env
+# edit .env: paste in your own API key values (retype them -- don't copy
+# .env between machines through a git repo, even privately)
+
+mkdir -p voice && cd voice
+curl -sL -o en_US-lessac-medium.onnx \
+  "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+curl -sL -o en_US-lessac-medium.onnx.json \
+  "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+cd ..
+
+set -a && source .env && set +a
+python -m pipeline.main "a test topic"   # confirms the whole chain works
+```
+
+For the OpenClaw agent layer (Phase 1/2), also on the new machine:
+
+```bash
+curl -fsSL https://openclaw.ai/install.sh | bash   # run yourself, not through Claude
+openclaw gateway install
+for skill in yt-content-analyst yt-scriptwriter yt-asset-gatherer yt-editor yt-approval-gateway yt-uploader; do
+  openclaw skills install "./openclaw-skills/$skill" --as "$skill" --force
+done
+openclaw channels login --channel whatsapp   # re-link WhatsApp on this machine
+```
+
+A Claude Code session on one machine cannot resume/control another machine
+just because the same account is logged in — "can't reach your computer" is
+expected, not a bug. Each machine runs its own independent OpenClaw
+Gateway and Claude Code session; this repo is the thing that travels
+between them, not the running session itself.
+
 ## What it does
 
 1. **Script** — calls an LLM via OpenRouter, returns title + per-scene
