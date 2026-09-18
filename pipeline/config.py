@@ -76,6 +76,11 @@ IMAGE_ENGINE = _tunable("IMAGE_ENGINE", "placeholder")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 IMAGEN_MODEL = _tunable("IMAGEN_MODEL", "gemini-2.5-flash-image")
 
+# Pollinations.ai: fully free, no signup needed to generate at all, but the
+# "nologo" watermark-removal flag specifically requires a free (not paid)
+# registered account -- get a key at https://enter.pollinations.ai
+POLLINATIONS_API_KEY = os.environ.get("POLLINATIONS_API_KEY", "")
+
 # A style anchor prepended to every scene's image_prompt so all images in a
 # video look like they belong to the same shoot/art style, not a random grab
 # bag. Editable from the control center.

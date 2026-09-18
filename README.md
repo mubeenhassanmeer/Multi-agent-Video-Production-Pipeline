@@ -12,7 +12,8 @@ upload step is built but blocked on one credential only you can provide
 |---|------|----------------|--------|
 | 1 | OpenRouter API key + free model slug | [openrouter.ai/models](https://openrouter.ai/models) (filter: free) → sign up → API key | ✅ done |
 | 2 | WhatsApp linked | `openclaw channels login --channel whatsapp`, scan QR | ✅ done |
-| 3 | Gemini API key (real images) | [aistudio.google.com](https://aistudio.google.com) → "Get API key" (needs a Google Cloud project with **billing enabled** to go past the free tier — billing setup is a payment-details step only you can do) | ⏳ needed for `IMAGE_ENGINE=imagen` |
+| 3 | Pollinations.ai API key (free images) | [enter.pollinations.ai](https://enter.pollinations.ai) → sign up (free) → API key. **Known limitation:** even with a key, the free tier inconsistently ignores the watermark-removal/model params under load and falls back to a watermarked community model — verified by repeated live testing, not a bug in this code. Review generated videos before upload; switch to `IMAGE_ENGINE=imagen` (paid) if you need guaranteed watermark-free output. | ✅ active now |
+| 3b | Gemini API key (alt. paid image option) | [aistudio.google.com](https://aistudio.google.com) → "Get API key" (needs a Google Cloud project with **billing enabled** to go past the free tier — billing setup is a payment-details step only you can do) | ⏳ optional, `IMAGE_ENGINE=imagen` |
 | 4 | Fish Audio API key (voice) | [fish.audio](https://fish.audio) → sign up → dashboard → API keys | ⏳ needed for `TTS_ENGINE=fishaudio` |
 | 5 | ElevenLabs API key + voice ID (optional alt. voice) | [elevenlabs.io](https://elevenlabs.io) → sign up → API key, then Voice Library for a voice ID | ⏳ optional |
 | 6 | YouTube OAuth `client_secret.json` | [console.cloud.google.com](https://console.cloud.google.com) → enable YouTube Data API v3 → OAuth consent screen → OAuth client ID (Desktop app) → download JSON | ⏳ needed for upload |

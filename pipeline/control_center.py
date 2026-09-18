@@ -21,7 +21,7 @@ FIELDS = [
     ("ELEVENLABS_MODEL_ID", "text", None),
     ("FISHAUDIO_REFERENCE_ID", "text", None),
     ("FISHAUDIO_MODEL", "text", None),
-    ("IMAGE_ENGINE", "select", ["placeholder", "imagen"]),
+    ("IMAGE_ENGINE", "select", ["placeholder", "pollinations", "imagen"]),
     ("IMAGE_CADENCE_SECONDS", "number", None),
     ("IMAGES_PER_BATCH", "number", None),
     ("IMAGE_MAX_RETRIES", "number", None),

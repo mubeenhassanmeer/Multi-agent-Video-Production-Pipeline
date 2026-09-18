@@ -95,17 +95,77 @@ def _generate_imagen(prompt: str, out_path: Path) -> None:
     out_path.write_bytes(image_bytes)
 
 
+def _generate_pollinations(prompt: str, out_path: Path) -> None:
+    """Free, keyless image generation via image.pollinations.ai.
+
+    No signup, no API key, fully automatable -- verified working directly
+    (not just from docs) before wiring this in. In practice the free tier
+    ignores requested width/height/model under load and returns its own
+    default (observed: 1024x576, "sana" model) -- so this always resizes
+    the result locally to the exact target resolution rather than trusting
+    the service to honor the request.
+    """
+    import io
+    import urllib.parse
+
+    full_prompt = f"{config.IMAGE_MASTER_PROMPT}, {prompt}" if config.IMAGE_MASTER_PROMPT else prompt
+    encoded_prompt = urllib.parse.quote(full_prompt)
+
+    params = {
+        "width": config.VIDEO_WIDTH,
+        "height": config.VIDEO_HEIGHT,
+        "model": "flux",
+        "nologo": "true",
+    }
+    if config.POLLINATIONS_API_KEY:
+        # Verified empirically: "token" is the real param name here -- the
+        # more obvious "key"/"apikey"/"api_key" guesses are silently
+        # ignored (watermark stays) even though they don't error.
+        params["token"] = config.POLLINATIONS_API_KEY
+
+    resp = requests.get(
+        f"https://image.pollinations.ai/prompt/{encoded_prompt}",
+        params=params,
+        timeout=120,
+    )
+    resp.raise_for_status()
+    if resp.headers.get("content-type", "").startswith("application/json"):
+        # Pollinations returns a 200 with a JSON error body on some failures
+        raise RuntimeError(f"Pollinations returned an error payload: {resp.text[:300]}")
+
+    img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+    target_w, target_h = config.VIDEO_WIDTH, config.VIDEO_HEIGHT
+    # Resize to cover the target box, then center-crop -- avoids stretching
+    # distortion when the returned aspect ratio doesn't match ours.
+    src_ratio = img.width / img.height
+    target_ratio = target_w / target_h
+    if src_ratio > target_ratio:
+        new_h = target_h
+        new_w = int(new_h * src_ratio)
+    else:
+        new_w = target_w
+        new_h = int(new_w / src_ratio)
+    img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    left = (new_w - target_w) // 2
+    top = (new_h - target_h) // 2
+    img = img.crop((left, top, left + target_w, top + target_h))
+    img.save(out_path)
+
+
 def _generate_one(index: int, prompt: str, out_path: Path) -> None:
     if config.IMAGE_ENGINE == "placeholder":
         _generate_placeholder(index, prompt, out_path)
         return
-    if config.IMAGE_ENGINE != "imagen":
+    if config.IMAGE_ENGINE not in ("imagen", "pollinations"):
         raise ValueError(f"Unknown IMAGE_ENGINE: {config.IMAGE_ENGINE}")
 
     last_error = None
     for attempt in range(1, config.IMAGE_MAX_RETRIES + 1):
         try:
-            _generate_imagen(prompt, out_path)
+            if config.IMAGE_ENGINE == "imagen":
+                _generate_imagen(prompt, out_path)
+            else:
+                _generate_pollinations(prompt, out_path)
             return
         except Exception as e:  # noqa: BLE001 -- deliberately broad: any failure retries
             last_error = e
