@@ -3,18 +3,63 @@ non-secret, frequently-adjusted settings (TTS engine/voice, image cadence,
 master prompt, background music) without editing .env or restarting
 anything. Writes pipeline_config.json, which config.py reads on every run.
 
-API keys are NOT edited here -- they stay in .env only, so this page stays
-safe to leave running/screen-share.
+Tunable settings above the "Add an API key" section are non-secret and
+saved to pipeline_config.json. The "Add an API key" section writes
+directly to .env instead (never to pipeline_config.json, which is meant to
+be safe to commit) -- values are write-only: once saved, this page never
+displays them back, only whether each var is currently set.
 
     python -m pipeline.control_center
     -> http://127.0.0.1:5057
 """
 import json
+import re
 
 import requests
 from flask import Flask, redirect, request
 
 from . import config
+
+ENV_PATH = config.ROOT_DIR / ".env"
+ENV_VAR_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+# Known vars we show set/unset status for. Any other name is still
+# accepted (that's the point -- "add an API key for any model manually")
+# and just won't get a friendly label.
+KNOWN_ENV_VARS = {
+    "OPENROUTER_API_KEY": "OpenRouter (scriptwriting LLM)",
+    "ELEVENLABS_API_KEY": "ElevenLabs (voice)",
+    "FISHAUDIO_API_KEY": "Fish Audio (voice)",
+    "GEMINI_API_KEY": "Gemini API (Imagen-successor images)",
+    "POLLINATIONS_API_KEY": "Pollinations.ai (images)",
+}
+
+
+def _read_env_lines() -> list:
+    if ENV_PATH.exists():
+        return ENV_PATH.read_text().splitlines()
+    return []
+
+
+def _env_is_set(name: str) -> bool:
+    for line in _read_env_lines():
+        if line.startswith(f"{name}=") and line.split("=", 1)[1].strip():
+            return True
+    return False
+
+
+def _set_env_var(name: str, value: str) -> None:
+    lines = _read_env_lines()
+    out, found = [], False
+    for line in lines:
+        if line.startswith(f"{name}="):
+            out.append(f"{name}={value}")
+            found = True
+        else:
+            out.append(line)
+    if not found:
+        out.append(f"{name}={value}")
+    ENV_PATH.write_text("\n".join(out) + "\n")
 
 # Curated, manually vetted subset of Fish Audio's public voice library
 # (1000+ entries) -- narration-tagged, generic (not real-person/franchise
@@ -83,15 +128,35 @@ PAGE = """
   button {{ margin-top: 24px; padding: 10px 20px; font-size: 1rem; border: none;
     border-radius: 6px; background: #2e5395; color: white; cursor: pointer; }}
   .note {{ background: #eef2f8; padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-top: 20px; }}
+  hr {{ margin: 32px 0; border: none; border-top: 1px solid #ddd; }}
+  .status {{ font-size: 0.85rem; margin: 4px 0; }}
+  .status .set {{ color: #1a7f37; }}
+  .status .unset {{ color: #999; }}
 </style>
 <h1>Pipeline Control Center</h1>
-<p class="hint">Non-secret settings only. API keys stay in .env.</p>
+<p class="hint">Non-secret settings only below. API keys stay in .env, set via the section at the bottom.</p>
 <form method="post" action="/save">
 {fields}
   <button type="submit">Save</button>
 </form>
-<p class="note">Saved to <code>pipeline_config.json</code> and picked up by the next pipeline run
-(no restart needed for CLI runs; the OpenClaw agent picks it up on its next stage call too).</p>
+<p class="note">Saved to <code>pipeline_config.json</code> (safe to commit, no secrets) and picked up
+by the next pipeline run -- no restart needed for CLI runs; the OpenClaw agent picks it up on its
+next stage call too.</p>
+
+<hr>
+<h1>Add an API key</h1>
+<p class="hint">Writes directly to <code>.env</code> (not <code>pipeline_config.json</code> --
+never committed to git). Works for any provider, not just the ones this pipeline already knows
+about -- e.g. add a key for a different model/provider you want to wire in later. Values are
+write-only: this page never displays a saved value back, only whether it's set.</p>
+<div class="status">{env_status}</div>
+<form method="post" action="/set-env">
+  <label>Variable name<span class="hint"> - e.g. OPENROUTER_API_KEY, or any name for a new provider</span></label>
+  <input type="text" name="env_name" placeholder="SOME_PROVIDER_API_KEY" pattern="[A-Z][A-Z0-9_]*" required>
+  <label>Value</label>
+  <input type="password" name="env_value" placeholder="paste the key here" required>
+  <button type="submit">Save to .env</button>
+</form>
 """
 
 HINTS = {
@@ -154,10 +219,32 @@ def _render_field(name: str, kind: str, options) -> str:
     return f'{label}<input type="{kind}" step="any" name="{name}" value="{value}">'
 
 
+def _env_status_html() -> str:
+    rows = []
+    for name, label in KNOWN_ENV_VARS.items():
+        is_set = _env_is_set(name)
+        cls = "set" if is_set else "unset"
+        mark = "✅ set" if is_set else "✗ not set"
+        rows.append(f'<div class="{cls}">{name} ({label}): {mark}</div>')
+    return "".join(rows)
+
+
 @app.route("/")
 def index():
     fields_html = "".join(_render_field(*f) for f in FIELDS)
-    return PAGE.format(fields=fields_html)
+    return PAGE.format(fields=fields_html, env_status=_env_status_html())
+
+
+@app.route("/set-env", methods=["POST"])
+def set_env():
+    name = request.form.get("env_name", "").strip().upper()
+    value = request.form.get("env_value", "")
+    if not ENV_VAR_NAME_RE.match(name):
+        return "Invalid variable name -- must be UPPER_SNAKE_CASE starting with a letter.", 400
+    if not value:
+        return "Value cannot be empty.", 400
+    _set_env_var(name, value)
+    return redirect("/")
 
 
 @app.route("/save", methods=["POST"])
