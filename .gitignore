@@ -1,0 +1,21 @@
+# Secrets -- never commit these, even to a private repo
+.env
+client_secret.json
+token.json
+
+# Local dependency install (722MB, fully reproducible from requirements)
+venv/
+
+# Downloaded model binaries (regenerate via README instructions)
+voice/*.onnx
+voice/*.onnx.json
+
+# Generated per-run media output (large, regeneratable, not source)
+output/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
