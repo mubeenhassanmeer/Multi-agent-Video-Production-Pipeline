@@ -27,7 +27,8 @@ ENV_VAR_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 # accepted (that's the point -- "add an API key for any model manually")
 # and just won't get a friendly label.
 KNOWN_ENV_VARS = {
-    "OPENROUTER_API_KEY": "OpenRouter (scriptwriting LLM)",
+    "GROQ_API_KEY": "Groq (scriptwriting LLM, default provider)",
+    "OPENROUTER_API_KEY": "OpenRouter (scriptwriting LLM, alt. provider)",
     "ELEVENLABS_API_KEY": "ElevenLabs (voice)",
     "FISHAUDIO_API_KEY": "Fish Audio (voice)",
     "GEMINI_API_KEY": "Gemini API (Imagen-successor images)",
@@ -100,6 +101,8 @@ def _fetch_elevenlabs_voices():
 app = Flask(__name__)
 
 FIELDS = [
+    ("LLM_PROVIDER", "select", ["groq", "openrouter"]),
+    ("GROQ_MODEL", "text", None),
     ("TTS_ENGINE", "select", ["piper", "elevenlabs", "fishaudio"]),
     ("ELEVENLABS_VOICE_ID", "voice_select_elevenlabs", None),
     ("ELEVENLABS_MODEL_ID", "text", None),
@@ -165,6 +168,7 @@ HINTS = {
     "IMAGE_MAX_RETRIES": "retries for one failed image before falling back to a placeholder",
     "IMAGE_MASTER_PROMPT": "style anchor prepended to every scene's image prompt, for a consistent look",
     "MUSIC_VOLUME": "background music volume relative to voiceover (0.0-1.0, e.g. 0.12)",
+    "GROQ_MODEL": "e.g. openai/gpt-oss-120b -- see console.groq.com for the current catalog",
     "ELEVENLABS_VOICE_ID": "live-fetched from your account if ELEVENLABS_API_KEY is set in .env",
     "FISHAUDIO_REFERENCE_ID": "curated subset -- browse the full 1000+ library at fish.audio/discovery",
 }

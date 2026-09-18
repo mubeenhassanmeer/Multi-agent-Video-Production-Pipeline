@@ -1,5 +1,9 @@
 """Stage 1: turn a topic into a structured script (hook/body/outro, per-scene
-narration + image prompt) using an LLM via OpenRouter.
+narration + image prompt) using an LLM.
+
+Provider is LLM_PROVIDER ("groq" default, or "openrouter") -- both are
+OpenAI-compatible chat-completions APIs, so this is one call shape with a
+different base URL/key/model per provider.
 """
 import json
 import re
@@ -38,7 +42,27 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-def generate_script(topic: str) -> dict:
+def _call_groq(topic: str) -> str:
+    if not config.GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is not set in the environment.")
+    resp = requests.post(
+        f"{config.GROQ_BASE_URL}/chat/completions",
+        headers={"Authorization": f"Bearer {config.GROQ_API_KEY}", "Content-Type": "application/json"},
+        json={
+            "model": config.GROQ_MODEL,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"Topic: {topic}"},
+            ],
+            "temperature": 0.8,
+        },
+        timeout=120,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+def _call_openrouter(topic: str) -> str:
     if not config.OPENROUTER_API_KEY:
         raise RuntimeError("OPENROUTER_API_KEY is not set in the environment.")
     if not config.OPENROUTER_MODEL:
@@ -47,13 +71,9 @@ def generate_script(topic: str) -> dict:
             "https://openrouter.ai/models (filter: free) and export it, e.g.\n"
             "  export OPENROUTER_MODEL='vendor/model-name:free'"
         )
-
     resp = requests.post(
         f"{config.OPENROUTER_BASE_URL}/chat/completions",
-        headers={
-            "Authorization": f"Bearer {config.OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-        },
+        headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
         json={
             "model": config.OPENROUTER_MODEL,
             "messages": [
@@ -65,8 +85,16 @@ def generate_script(topic: str) -> dict:
         timeout=120,
     )
     resp.raise_for_status()
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+def generate_script(topic: str) -> dict:
+    if config.LLM_PROVIDER == "groq":
+        content = _call_groq(topic)
+    elif config.LLM_PROVIDER == "openrouter":
+        content = _call_openrouter(topic)
+    else:
+        raise ValueError(f"Unknown LLM_PROVIDER: {config.LLM_PROVIDER}")
 
     try:
         script = _extract_json(content)

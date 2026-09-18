@@ -1,12 +1,15 @@
 """Central configuration for the pipeline.
 
-Secrets (API keys) come from environment variables only (.env) -- never from
-the web-editable control center, since that file is meant to be safe to
-screen-share/back up. Tunable, non-secret settings (TTS engine choice, image
-cadence, master prompt, etc.) live in pipeline_config.json, written by the
-control center (see pipeline/control_center.py) and readable here without a
-restart. Env vars remain the fallback/default for every tunable so the CLI
-tools keep working with no control center running.
+Secrets (API keys) come from environment variables only (.env). Tunable,
+non-secret settings (TTS engine choice, image cadence, master prompt, etc.)
+live in pipeline_config.json, written by the control center (see
+pipeline/control_center.py) and readable here without a restart. Env vars
+remain the fallback/default for every tunable so the CLI tools keep working
+with no control center running.
+
+The control center's "Add an API key" section can also write directly to
+.env (never to pipeline_config.json, which stays safe to commit/share) --
+see control_center.py for that flow.
 """
 import json
 import os
@@ -34,14 +37,23 @@ def _tunable(key: str, default: str) -> str:
 
 
 # --- LLM (scriptwriting) -----------------------------------------------
-# OpenRouter is OpenAI-compatible, so any OpenRouter model (including a free
-# stealth/cloaked model) works via the same chat-completions call.
+# "openrouter" or "groq" -- both are OpenAI-compatible chat-completions
+# APIs, just different base URL/key/model. OpenRouter's free tier caps at
+# 50 requests/day *account-wide* (shared across every free model) unless
+# $10 lifetime credit has been purchased; Groq's free tier has no such
+# balance gate and is far more generous (verified: 2026-09-18).
+LLM_PROVIDER = _tunable("LLM_PROVIDER", "groq")
+
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # Set this to the exact free model slug shown on https://openrouter.ai/models
 # (filter by "free") -- slugs for free/stealth models change over time, so it
 # is intentionally not hardcoded here.
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "")
+
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_MODEL = _tunable("GROQ_MODEL", "openai/gpt-oss-120b")
 
 # --- TTS (voiceover) -----------------------------------------------------
 # "piper" (free/local), "elevenlabs", or "fishaudio". Switchable live from
