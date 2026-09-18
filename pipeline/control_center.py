@@ -31,7 +31,7 @@ KNOWN_ENV_VARS = {
     "OPENROUTER_API_KEY": "OpenRouter (scriptwriting LLM, alt. provider)",
     "ELEVENLABS_API_KEY": "ElevenLabs (voice)",
     "FISHAUDIO_API_KEY": "Fish Audio (voice)",
-    "GEMINI_API_KEY": "Gemini API (Imagen-successor images)",
+    "GEMINI_API_KEY": "Gemini API (images via IMAGE_ENGINE=imagen; also used for OpenClaw's own agent-layer model)",
     "POLLINATIONS_API_KEY": "Pollinations.ai (images)",
 }
 
